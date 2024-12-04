@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button"
-import Image from "next/image"
+import DefiGoldIcon from "@/public/defi-gold.svg"
+import Image from "next/image";
 
 export function Navbar() {
   return (
@@ -7,26 +7,22 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 flex items-center">
               <Image
-                src="/lido-logo.svg"
+                src={DefiGoldIcon}
                 alt="Lido"
                 width={92}
                 height={32}
-                className="h-8 w-auto invert"
+                className="h-8 w-auto"
               />
+              <h4 className="ml-2">DEFI GOLD</h4>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Button 
-              variant="outline" 
-              className="border-[#333333] hover:bg-[#222222] text-gray-300"
-            >
-              Connect Wallet
-            </Button>
+            <appkit-button />
           </div>
         </div>
       </div>
     </nav>
-  )
+  );
 }
