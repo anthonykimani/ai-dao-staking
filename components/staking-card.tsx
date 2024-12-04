@@ -7,15 +7,10 @@ import { Info } from "lucide-react"
 import { useWriteContract, useReadContract, useAccount } from "wagmi"
 import { useState } from "react"
 import * as ERC20 from "@openzeppelin/contracts/build/contracts/ERC20.json"
+import { parseEther, formatEther } from "viem"
 
 const STAKING_CONTRACT = '0x8cb1174ed0bDFF74cd99CcBD690eEaa7288993cB'
 const DGOLD_TOKEN = '0x082C329Ae8637bc89FD480B3d87484b5db441d6d'
-
-// Define types for stake data
-interface StakeData {
-  amount: bigint
-  unlockTime: bigint
-}
 
 export function StakingCard() {
   const [stakeAmount, setStakeAmount] = useState('')
@@ -23,7 +18,6 @@ export function StakingCard() {
   const { writeContract } = useWriteContract()
   const { address } = useAccount()
 
-  // Read DGOLD balance
   const { data: dgoldBalance }  = useReadContract({
     abi: ERC20.abi,
     address: DGOLD_TOKEN,
@@ -31,8 +25,7 @@ export function StakingCard() {
     args: [address],
   }) as { data: bigint }
 
-  // Read staked amount
-  const stakeInfo  = useReadContract({
+  const { data: stakeInfo } = useReadContract({
     abi: [
       {
         inputs: [{ name: 'user', type: 'address' }],
@@ -48,27 +41,23 @@ export function StakingCard() {
     address: STAKING_CONTRACT,
     functionName: 'getStake',
     args: [address as `0x${string}`],
-  }) as unknown as StakeData
+  }) as { data: [bigint, bigint] }
 
-  // Read token allowance
   const { data: allowance } = useReadContract({
     abi: ERC20.abi,
     address: DGOLD_TOKEN,
     functionName: 'allowance',
     args: [address, STAKING_CONTRACT],
-  })
+  }) as { data: bigint }
 
-  // Handle max button click for staking
   const handleStakeMax = () => {
-    setStakeAmount(dgoldBalance ? dgoldBalance.toString() : '0')
+    setStakeAmount(dgoldBalance ? formatEther(dgoldBalance) : '0')
   }
 
-  // Handle max button click for unstaking
   const handleUnstakeMax = () => {
-    setUnstakeAmount(stakeInfo ? stakeInfo.amount.toString() : '0')
+    setUnstakeAmount(stakeInfo?.[0] ? formatEther(stakeInfo[0]) : '0')
   }
 
-  // Handle token approval
   const handleApprove = async () => {
     if (!stakeAmount || Number(stakeAmount) <= 0) return
     
@@ -76,11 +65,10 @@ export function StakingCard() {
       abi: ERC20.abi,
       address: DGOLD_TOKEN,
       functionName: 'approve',
-      args: [STAKING_CONTRACT, BigInt(stakeAmount)],
+      args: [STAKING_CONTRACT, parseEther(stakeAmount)],
     })
   }
 
-  // Handle staking
   const handleStake = async () => {
     if (!stakeAmount || Number(stakeAmount) <= 0) return
 
@@ -96,11 +84,10 @@ export function StakingCard() {
       ],
       address: STAKING_CONTRACT,
       functionName: 'stake',
-      args: [BigInt(stakeAmount)],
+      args: [parseEther(stakeAmount)],
     })
   }
 
-  // Handle unstaking
   const handleUnstake = async () => {
     if (!unstakeAmount || !stakeInfo) return
 
@@ -116,17 +103,13 @@ export function StakingCard() {
       ],
       address: STAKING_CONTRACT,
       functionName: 'unstake',
-      args: [BigInt(unstakeAmount)],
+      args: [parseEther(unstakeAmount)],
     })
   }
 
-  const formatBalance = (balance: bigint | undefined) => {
-    return balance ? (Number(balance) / 1e18).toFixed(4) : '0'
-  }
-
   const getRemainingLockTime = () => {
-    if (!stakeInfo?.unlockTime) return 'No active stake'
-    const unlockTime = Number(stakeInfo.unlockTime) * 1000
+    if (!stakeInfo?.[1]) return 'No active stake'
+    const unlockTime = Number(stakeInfo[1]) * 1000
     const now = Date.now()
     if (now >= unlockTime) return 'Unlocked'
     
@@ -149,7 +132,7 @@ export function StakingCard() {
               <div className="flex justify-between">
                 <label className="text-sm text-gray-400">Amount</label>
                 <span className="text-sm text-gray-400">
-                  Balance: {dgoldBalance} DGOLD
+                  Balance: {formatEther(dgoldBalance || BigInt(0))} DGOLD
                 </span>
               </div>
               <div className="flex gap-2">
@@ -180,12 +163,12 @@ export function StakingCard() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">You will receive</span>
-                <span className="text-gray-200">{stakeAmount || '0'} DVOTE</span>
+                <span className="text-gray-200">{parseFloat(stakeAmount || '0').toFixed(18)} DVOTE</span>
               </div>
             </div>
 
             {address ? (
-              Number(allowance) >= Number(stakeAmount) ? (
+              (allowance || BigInt(0)) >= parseEther(stakeAmount || '0') ? (
                 <Button 
                   onClick={handleStake} 
                   className="w-full" 
@@ -218,7 +201,7 @@ export function StakingCard() {
               <div className="flex justify-between">
                 <label className="text-sm text-gray-400">Amount</label>
                 <span className="text-sm text-gray-400">
-                  Staked: {formatBalance(stakeInfo?.amount)} DVOTE
+                  Staked: {formatEther(stakeInfo?.[0] || BigInt(0))} DVOTE
                 </span>
               </div>
               <div className="flex gap-2">
@@ -249,7 +232,7 @@ export function StakingCard() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">You will receive</span>
-                <span className="text-gray-200">{unstakeAmount || '0'} DGOLD</span>
+                <span className="text-gray-200">{parseFloat(unstakeAmount || '0').toFixed(18)} DGOLD</span>
               </div>
             </div>
 
@@ -262,11 +245,11 @@ export function StakingCard() {
                   !stakeInfo || 
                   !unstakeAmount || 
                   Number(unstakeAmount) <= 0 ||
-                  BigInt(unstakeAmount) > stakeInfo.amount ||
-                  Date.now() < Number(stakeInfo.unlockTime) * 1000
+                  parseEther(unstakeAmount) > (stakeInfo[0] || BigInt(0)) ||
+                  Date.now() < Number(stakeInfo[1]) * 1000
                 }
               >
-                {!stakeInfo || Date.now() < Number(stakeInfo.unlockTime) * 1000 
+                {!stakeInfo || Date.now() < Number(stakeInfo[1]) * 1000 
                   ? "Tokens Locked" 
                   : "Unstake DGOLD"}
               </Button>
