@@ -11,6 +11,7 @@ import { parseEther, formatEther } from "viem"
 
 const STAKING_CONTRACT = '0x8cb1174ed0bDFF74cd99CcBD690eEaa7288993cB'
 const DGOLD_TOKEN = '0x082C329Ae8637bc89FD480B3d87484b5db441d6d'
+const DVOTE_TOKEN = '0xYourDVOTETokenAddress'
 
 export function StakingCard() {
   const [stakeAmount, setStakeAmount] = useState('')
@@ -21,6 +22,13 @@ export function StakingCard() {
   const { data: dgoldBalance }  = useReadContract({
     abi: ERC20.abi,
     address: DGOLD_TOKEN,
+    functionName: 'balanceOf',
+    args: [address],
+  }) as { data: bigint }
+
+  const { data: dvoteBalance }  = useReadContract({
+    abi: ERC20.abi,
+    address: DVOTE_TOKEN,
     functionName: 'balanceOf',
     args: [address],
   }) as { data: bigint }
@@ -55,7 +63,7 @@ export function StakingCard() {
   }
 
   const handleUnstakeMax = () => {
-    setUnstakeAmount(stakeInfo?.[0] ? formatEther(stakeInfo[0]) : '0')
+    setUnstakeAmount(dvoteBalance ? formatEther(dvoteBalance) : '0')
   }
 
   const handleApprove = async () => {
@@ -89,7 +97,7 @@ export function StakingCard() {
   }
 
   const handleUnstake = async () => {
-    if (!unstakeAmount || !stakeInfo) return
+    if (!unstakeAmount || !dvoteBalance) return
 
     writeContract({
       abi: [
@@ -131,9 +139,14 @@ export function StakingCard() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <label className="text-sm text-gray-400">Amount</label>
-                <span className="text-sm text-gray-400">
-                  Balance: {formatEther(dgoldBalance || BigInt(0))} DGOLD
-                </span>
+                <div className="text-right">
+                  <div className="text-sm text-gray-400">
+                    DGOLD Balance: {formatEther(dgoldBalance || BigInt(0))}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    DVOTE Balance: {formatEther(dvoteBalance || BigInt(0))}
+                  </div>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Input
@@ -173,7 +186,11 @@ export function StakingCard() {
                   onClick={handleStake} 
                   className="w-full" 
                   size="lg"
-                  disabled={!stakeAmount || Number(stakeAmount) <= 0}
+                  disabled={
+                    !stakeAmount || 
+                    Number(stakeAmount) <= 0 ||
+                    parseEther(stakeAmount) > (dgoldBalance || BigInt(0))
+                  }
                 >
                   Stake DGOLD
                 </Button>
@@ -200,9 +217,14 @@ export function StakingCard() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <label className="text-sm text-gray-400">Amount</label>
-                <span className="text-sm text-gray-400">
-                  Staked: {formatEther(stakeInfo?.[0] || BigInt(0))} DVOTE
-                </span>
+                <div className="text-right">
+                  <div className="text-sm text-gray-400">
+                    DVOTE Balance: {formatEther(dvoteBalance || BigInt(0))}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Staked DGOLD: {formatEther(stakeInfo?.[0] || BigInt(0))}
+                  </div>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Input
@@ -242,14 +264,14 @@ export function StakingCard() {
                 className="w-full" 
                 size="lg"
                 disabled={
-                  !stakeInfo || 
+                  !dvoteBalance || 
                   !unstakeAmount || 
                   Number(unstakeAmount) <= 0 ||
-                  parseEther(unstakeAmount) > (stakeInfo[0] || BigInt(0)) ||
-                  Date.now() < Number(stakeInfo[1]) * 1000
+                  parseEther(unstakeAmount) > (dvoteBalance || BigInt(0)) ||
+                  Date.now() < Number(stakeInfo?.[1] || 0) * 1000
                 }
               >
-                {!stakeInfo || Date.now() < Number(stakeInfo[1]) * 1000 
+                {!stakeInfo || Date.now() < Number(stakeInfo?.[1] || 0) * 1000 
                   ? "Tokens Locked" 
                   : "Unstake DGOLD"}
               </Button>
