@@ -141,10 +141,7 @@ export function StakingCard() {
                 <label className="text-sm text-gray-400">Amount</label>
                 <div className="text-right">
                   <div className="text-sm text-gray-400">
-                    DGOLD Balance: {formatEther(dgoldBalance || BigInt(0))}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    DVOTE Balance: {formatEther(dvoteBalance || BigInt(0))}
+                    Balance: {formatEther(dgoldBalance || BigInt(0))} DGOLD
                   </div>
                 </div>
               </div>
@@ -176,7 +173,7 @@ export function StakingCard() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">You will receive</span>
-                <span className="text-gray-200">{parseFloat(stakeAmount || '0').toFixed(18)} DVOTE</span>
+                <span className="text-gray-200">{formatEther(BigInt(parseEther(stakeAmount || '0')))} DVOTE</span>
               </div>
             </div>
 
@@ -219,10 +216,10 @@ export function StakingCard() {
                 <label className="text-sm text-gray-400">Amount</label>
                 <div className="text-right">
                   <div className="text-sm text-gray-400">
-                    DVOTE Balance: {formatEther(dvoteBalance || BigInt(0))}
+                    Balance: {formatEther(dvoteBalance || BigInt(0))} DVOTE
                   </div>
                   <div className="text-sm text-gray-400">
-                    Staked DGOLD: {formatEther(stakeInfo?.[0] || BigInt(0))}
+                    Staked: {formatEther(stakeInfo?.[0] || BigInt(0))} DGOLD
                   </div>
                 </div>
               </div>
@@ -254,7 +251,7 @@ export function StakingCard() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">You will receive</span>
-                <span className="text-gray-200">{parseFloat(unstakeAmount || '0').toFixed(18)} DGOLD</span>
+                <span className="text-gray-200">{formatEther(BigInt(parseEther(unstakeAmount || '0')))} DGOLD</span>
               </div>
             </div>
 
