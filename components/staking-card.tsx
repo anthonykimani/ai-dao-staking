@@ -17,8 +17,6 @@ interface StakeData {
   unlockTime: bigint
 }
 
-const STAKE_DURATION = 90 * 24 * 60 * 60 // 90 days in seconds
-
 export function StakingCard() {
   const [stakeAmount, setStakeAmount] = useState('')
   const [unstakeAmount, setUnstakeAmount] = useState('')
@@ -26,16 +24,15 @@ export function StakingCard() {
   const { address } = useAccount()
 
   // Read DGOLD balance
-  const { data: dgoldBalance } = useReadContract({
+  const { data: dgoldBalance }  = useReadContract({
     abi: ERC20.abi,
     address: DGOLD_TOKEN,
     functionName: 'balanceOf',
     args: [address],
-    watch: true,
-  })
+  }) as { data: bigint }
 
   // Read staked amount
-  const { data: stakeInfo } = useReadContract({
+  const stakeInfo  = useReadContract({
     abi: [
       {
         inputs: [{ name: 'user', type: 'address' }],
@@ -50,8 +47,7 @@ export function StakingCard() {
     ],
     address: STAKING_CONTRACT,
     functionName: 'getStake',
-    args: [address],
-    watch: true,
+    args: [address as `0x${string}`],
   }) as unknown as StakeData
 
   // Read token allowance
@@ -60,7 +56,6 @@ export function StakingCard() {
     address: DGOLD_TOKEN,
     functionName: 'allowance',
     args: [address, STAKING_CONTRACT],
-    watch: true,
   })
 
   // Handle max button click for staking
@@ -154,7 +149,7 @@ export function StakingCard() {
               <div className="flex justify-between">
                 <label className="text-sm text-gray-400">Amount</label>
                 <span className="text-sm text-gray-400">
-                  Balance: {formatBalance(dgoldBalance)} DGOLD
+                  Balance: {dgoldBalance} DGOLD
                 </span>
               </div>
               <div className="flex gap-2">
