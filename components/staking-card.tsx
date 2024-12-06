@@ -3,30 +3,36 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Info } from "lucide-react"
+import { Info, Loader2 } from "lucide-react"
 import { useWriteContract, useReadContract, useAccount } from "wagmi"
 import { useState } from "react"
 import * as ERC20 from "@openzeppelin/contracts/build/contracts/ERC20.json"
 import { parseEther, formatEther } from "viem"
+import { ToastAction } from "@/components/ui/toast"
+import { useToast } from "@/hooks/use-toast"
 
 const STAKING_CONTRACT = '0x8cb1174ed0bDFF74cd99CcBD690eEaa7288993cB'
 const DGOLD_TOKEN = '0x082C329Ae8637bc89FD480B3d87484b5db441d6d'
-const DVOTE_TOKEN = '0xYourDVOTETokenAddress'
+const DVOTE_TOKEN = '0x9bCA1e9852868d822Cd2c06da58253428F2B291D'
 
 export function StakingCard() {
   const [stakeAmount, setStakeAmount] = useState('')
   const [unstakeAmount, setUnstakeAmount] = useState('')
-  const { writeContract } = useWriteContract()
+  const [isApproving, setIsApproving] = useState(false)
+  const [isStaking, setIsStaking] = useState(false)
+  const [isUnstaking, setIsUnstaking] = useState(false)
+  const { writeContractAsync } = useWriteContract()
   const { address } = useAccount()
+  const { toast } = useToast()
 
-  const { data: dgoldBalance }  = useReadContract({
+  const { data: dgoldBalance } = useReadContract({
     abi: ERC20.abi,
     address: DGOLD_TOKEN,
     functionName: 'balanceOf',
     args: [address],
   }) as { data: bigint }
 
-  const { data: dvoteBalance }  = useReadContract({
+  const { data: dvoteBalance } = useReadContract({
     abi: ERC20.abi,
     address: DVOTE_TOKEN,
     functionName: 'balanceOf',
@@ -69,50 +75,143 @@ export function StakingCard() {
   const handleApprove = async () => {
     if (!stakeAmount || Number(stakeAmount) <= 0) return
     
-    writeContract({
-      abi: ERC20.abi,
-      address: DGOLD_TOKEN,
-      functionName: 'approve',
-      args: [STAKING_CONTRACT, parseEther(stakeAmount)],
-    })
+    setIsApproving(true)
+    try {
+      toast({
+        title: "Approval pending",
+        description: "Please confirm the transaction in your wallet",
+      })
+
+      await writeContractAsync({
+        abi: ERC20.abi,
+        address: DGOLD_TOKEN,
+        functionName: 'approve',
+        args: [STAKING_CONTRACT, parseEther(stakeAmount)],
+      })
+
+      toast({
+        title: "Approval successful",
+        description: "You can now stake your DGOLD tokens",
+      })
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Approval failed",
+        description: "There was an error approving your tokens",
+      })
+      console.error('Approval failed:', error)
+    } finally {
+      setIsApproving(false)
+    }
   }
 
   const handleStake = async () => {
     if (!stakeAmount || Number(stakeAmount) <= 0) return
 
-    writeContract({
-      abi: [
-        {
-          inputs: [{ name: 'amount', type: 'uint256' }],
-          name: 'stake',
-          outputs: [],
-          stateMutability: 'nonpayable',
-          type: 'function'
-        }
-      ],
-      address: STAKING_CONTRACT,
-      functionName: 'stake',
-      args: [parseEther(stakeAmount)],
-    })
+    setIsStaking(true)
+    try {
+      toast({
+        title: "Staking pending",
+        description: "Please confirm the staking transaction",
+      })
+
+      await writeContractAsync({
+        abi: [
+          {
+            inputs: [{ name: 'amount', type: 'uint256' }],
+            name: 'stake',
+            outputs: [],
+            stateMutability: 'nonpayable',
+            type: 'function'
+          }
+        ],
+        address: STAKING_CONTRACT,
+        functionName: 'stake',
+        args: [parseEther(stakeAmount)],
+      })
+
+      toast({
+        title: "Staking successful",
+        description: "Now delegating your voting power...",
+      })
+
+      await writeContractAsync({
+        abi: [
+          {
+            inputs: [{ name: 'delegatee', type: 'address' }],
+            name: 'delegate',
+            outputs: [],
+            stateMutability: 'nonpayable',
+            type: 'function'
+          }
+        ],
+        address: DVOTE_TOKEN,
+        functionName: 'delegate',
+        args: [address as `0x${string}`],
+      })
+
+      toast({
+        title: "Success",
+        description: "Tokens staked and voting power delegated",
+      })
+
+      setStakeAmount('')
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Transaction failed",
+        description: "There was an error with your transaction",
+      })
+      console.error('Staking or delegation failed:', error)
+    } finally {
+      setIsStaking(false)
+    }
   }
 
   const handleUnstake = async () => {
     if (!unstakeAmount || !dvoteBalance) return
 
-    writeContract({
-      abi: [
-        {
-          inputs: [{ name: 'amount', type: 'uint256' }],
-          name: 'unstake',
-          outputs: [],
-          stateMutability: 'nonpayable',
-          type: 'function'
-        }
-      ],
-      address: STAKING_CONTRACT,
-      functionName: 'unstake',
-      args: [parseEther(unstakeAmount)],
-    })
+    setIsUnstaking(true)
+    try {
+      toast({
+        title: "Unstaking pending",
+        description: "Please confirm the unstaking transaction",
+      })
+
+      await writeContractAsync({
+        abi: [
+          {
+            inputs: [{ name: 'amount', type: 'uint256' }],
+            name: 'unstake',
+            outputs: [],
+            stateMutability: 'nonpayable',
+            type: 'function'
+          }
+        ],
+        address: STAKING_CONTRACT,
+        functionName: 'unstake',
+        args: [parseEther(unstakeAmount)],
+      })
+
+      toast({
+        title: "Success",
+        description: "Tokens successfully unstaked",
+        action: (
+          <ToastAction altText="View transaction">View</ToastAction>
+        ),
+      })
+
+      setUnstakeAmount('')
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Unstaking failed",
+        description: "There was an error unstaking your tokens",
+      })
+      console.error('Unstaking failed:', error)
+    } finally {
+      setIsUnstaking(false)
+    }
   }
 
   const getRemainingLockTime = () => {
@@ -186,19 +285,34 @@ export function StakingCard() {
                   disabled={
                     !stakeAmount || 
                     Number(stakeAmount) <= 0 ||
-                    parseEther(stakeAmount) > (dgoldBalance || BigInt(0))
+                    parseEther(stakeAmount) > (dgoldBalance || BigInt(0)) ||
+                    isStaking
                   }
                 >
-                  Stake DGOLD
+                  {isStaking ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Staking...
+                    </>
+                  ) : (
+                    "Stake DGOLD"
+                  )}
                 </Button>
               ) : (
                 <Button 
                   onClick={handleApprove} 
                   className="w-full" 
                   size="lg"
-                  disabled={!stakeAmount || Number(stakeAmount) <= 0}
+                  disabled={!stakeAmount || Number(stakeAmount) <= 0 || isApproving}
                 >
-                  Approve DGOLD
+                  {isApproving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    "Approve DGOLD"
+                  )}
                 </Button>
               )
             ) : (
@@ -265,10 +379,16 @@ export function StakingCard() {
                   !unstakeAmount || 
                   Number(unstakeAmount) <= 0 ||
                   parseEther(unstakeAmount) > (dvoteBalance || BigInt(0)) ||
-                  Date.now() < Number(stakeInfo?.[1] || 0) * 1000
+                  Date.now() < Number(stakeInfo?.[1] || 0) * 1000 ||
+                  isUnstaking
                 }
               >
-                {!stakeInfo || Date.now() < Number(stakeInfo?.[1] || 0) * 1000 
+                {isUnstaking ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Unstaking...
+                  </>
+                ) : !stakeInfo || Date.now() < Number(stakeInfo?.[1] || 0) * 1000 
                   ? "Tokens Locked" 
                   : "Unstake DGOLD"}
               </Button>
