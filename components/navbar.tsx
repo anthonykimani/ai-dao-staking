@@ -1,4 +1,4 @@
-import DefiGoldIcon from "@/public/defi-gold.svg"
+import AIDaoIcon from "@/public/ai-dao.png"
 import Image from "next/image";
 
 export function Navbar() {
@@ -9,13 +9,13 @@ export function Navbar() {
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
               <Image
-                src={DefiGoldIcon}
+                src={AIDaoIcon}
                 alt="Lido"
                 width={92}
                 height={32}
                 className="h-8 w-auto"
               />
-              <h4 className="ml-2">DEFI GOLD</h4>
+              <h4 className="ml-2">AI DAO Staking</h4>
             </div>
           </div>
           <div className="flex items-center gap-4">

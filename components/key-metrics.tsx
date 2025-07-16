@@ -4,7 +4,7 @@ import { Badge } from "./ui/badge"
 export function KeyMetrics() {
   return (
     <div className="space-y-8">
-      <h2 className="text-3xl font-bold text-[#FDB32A]">
+      <h2 className="text-3xl font-bold text-[#0ad197d4]">
         Key Metrics
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

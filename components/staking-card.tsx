@@ -250,7 +250,7 @@ export function StakingCard() {
                   placeholder="0.0"
                   value={stakeAmount}
                   onChange={(e) => setStakeAmount(e.target.value)}
-                  className="text-lg bg-[#1A1A1A] border-[#333333] focus-visible:ring-[#FDB32A]"
+                  className="text-lg bg-[#1A1A1A] border-[#333333] focus-visible:ring-[#0ad197d4]"
                 />
                 <Button
                   variant="outline"
@@ -316,7 +316,7 @@ export function StakingCard() {
                 </Button>
               )
             ) : (
-              <Button className="w-full" size="lg">
+              <Button className="w-full hover:bg-[#0ad197d4]" size="lg">
                 Connect Wallet
               </Button>
             )}
@@ -343,7 +343,7 @@ export function StakingCard() {
                   placeholder="0.0"
                   value={unstakeAmount}
                   onChange={(e) => setUnstakeAmount(e.target.value)}
-                  className="text-lg bg-[#1A1A1A] border-[#333333] focus-visible:ring-[#FDB32A]"
+                  className="text-lg bg-[#1A1A1A] border-[#333333] focus-visible:ring-[#0ad197d4]"
                 />
                 <Button
                   variant="outline"
@@ -393,7 +393,7 @@ export function StakingCard() {
                   : "Unstake DGOLD"}
               </Button>
             ) : (
-              <Button className="w-full" size="lg">
+              <Button className="w-full hover:bg-[#0ad197d4]" size="lg">
                 Connect Wallet
               </Button>
             )}
