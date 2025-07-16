@@ -1,86 +1,138 @@
 'use client'
 
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Info, Loader2 } from "lucide-react"
 import { useWriteContract, useReadContract, useAccount } from "wagmi"
-import { useState } from "react"
 import * as ERC20 from "@openzeppelin/contracts/build/contracts/ERC20.json"
 import { parseEther, formatEther } from "viem"
 import { ToastAction } from "@/components/ui/toast"
 import { useToast } from "@/hooks/use-toast"
+import vERC20 from "@/context/votingERC20.json"
+import vailtABI from "@/context/vault.json"
 
-const STAKING_CONTRACT = '0x8cb1174ed0bDFF74cd99CcBD690eEaa7288993cB'
-const DGOLD_TOKEN = '0x082C329Ae8637bc89FD480B3d87484b5db441d6d'
-const DVOTE_TOKEN = '0x9bCA1e9852868d822Cd2c06da58253428F2B291D'
+/* ------------------------------------------------------------------
+ * IMPORTANT: Addresses + on-chain function names remain EXACTLY as provided.
+ * We only fixed display / formatting + hook usage so the UI reflects:
+ *   - staked balance (from vault.staked)
+ *   - remaining lock (from vault.timeUntilUnlock)
+ *   - correct lock duration label (30 days)
+ *   - proper bigint math
+ *   - safe hook calls (no hooks inside functions)
+ * ------------------------------------------------------------------ */
+
+const STAKING_CONTRACT = '0x48592D1411f05396F6e6Ce7CceB729Ef33b7cc0b'
+const DGOLD_TOKEN      = '0xEeD878017f027FE96316007D0ca5fDA58Ee93a6b'
+const DVOTE_TOKEN      = '0xD6a9563f3EeDE5eFA9183F938c4aDF7ccA7D6DB0'
 
 export function StakingCard() {
-  const [stakeAmount, setStakeAmount] = useState('')
+  /* ---------------------------- local state ---------------------------- */
+  const [stakeAmount, setStakeAmount]     = useState('')
   const [unstakeAmount, setUnstakeAmount] = useState('')
-  const [isApproving, setIsApproving] = useState(false)
-  const [isStaking, setIsStaking] = useState(false)
-  const [isUnstaking, setIsUnstaking] = useState(false)
+  const [isApproving, setIsApproving]     = useState(false)
+  const [isStaking, setIsStaking]         = useState(false)
+  const [isUnstaking, setIsUnstaking]     = useState(false)
+
   const { writeContractAsync } = useWriteContract()
   const { address } = useAccount()
   const { toast } = useToast()
 
-  const { data: dgoldBalance } = useReadContract({
+  /* ---------------------------- on-chain reads ------------------------- */
+  // User DGOLD (AIDAO) wallet balance
+  const { data: dgoldBalanceRaw } = useReadContract({
     abi: ERC20.abi,
     address: DGOLD_TOKEN,
     functionName: 'balanceOf',
     args: [address],
-  }) as { data: bigint }
+    query: { enabled: Boolean(address) },
+  }) as { data?: bigint }
 
-  const { data: dvoteBalance } = useReadContract({
-    abi: ERC20.abi,
+  // User vAIDAO wallet balance
+  const { data: dvoteBalanceRaw } = useReadContract({
+    abi: ERC20.abi, // vERC20 inherits ERC20Votes; ERC20 ABI is enough for balanceOf
     address: DVOTE_TOKEN,
     functionName: 'balanceOf',
     args: [address],
-  }) as { data: bigint }
+    query: { enabled: Boolean(address)},
+  }) as { data?: bigint }
 
-  const { data: stakeInfo } = useReadContract({
-    abi: [
-      {
-        inputs: [{ name: 'user', type: 'address' }],
-        name: 'getStake',
-        outputs: [
-          { name: 'amount', type: 'uint256' },
-          { name: 'unlockTime', type: 'uint256' }
-        ],
-        stateMutability: 'view',
-        type: 'function'
-      }
-    ],
+  // User staked balance (vault mapping staked(user) -> uint256)
+  const { data: stakedBalanceRaw } = useReadContract({
+    abi: vailtABI.abi,
     address: STAKING_CONTRACT,
-    functionName: 'getStake',
+    functionName: 'staked',
     args: [address as `0x${string}`],
-  }) as { data: [bigint, bigint] }
+    query: { enabled: Boolean(address) },
+  }) as { data?: bigint }
 
-  const { data: allowance } = useReadContract({
+  // User remaining lock time in seconds (vault.timeUntilUnlock(user))
+  const { data: secondsRemainingRaw, isLoading: isLoadingRemaining } = useReadContract({
+    abi: vailtABI.abi,
+    address: STAKING_CONTRACT,
+    functionName: 'timeUntilUnlock',
+    args: [address as `0x${string}`],
+    query: { enabled: Boolean(address), refetchInterval: 10_000 },
+  }) as { data?: bigint, isLoading: boolean }
+
+  // DGOLD allowance granted to staking vault
+  const { data: allowanceRaw } = useReadContract({
     abi: ERC20.abi,
     address: DGOLD_TOKEN,
     functionName: 'allowance',
     args: [address, STAKING_CONTRACT],
-  }) as { data: bigint }
+    query: { enabled: Boolean(address) },
+  }) as { data?: bigint }
 
+  /* ---------------------------- derived values ------------------------ */
+  const dgoldBalance  = dgoldBalanceRaw  ?? 0n
+  const dvoteBalance  = dvoteBalanceRaw  ?? 0n
+  const stakedBalance = stakedBalanceRaw ?? 0n
+  const allowance     = allowanceRaw     ?? 0n
+  const secondsRemaining = secondsRemainingRaw ?? 0n // duration, NOT timestamp
+
+  const isLocked = secondsRemaining > 0n
+
+  // UI helper: human readable countdown
+  const remainingLabel = useMemo(() => {
+    if (isLoadingRemaining) return '...'
+    if (!isLocked) return 'Unlocked'
+
+    const s = Number(secondsRemaining)
+    const days = Math.floor(s / 86400)
+    const hours = Math.floor((s % 86400) / 3600)
+    const mins = Math.floor((s % 3600) / 60)
+
+    if (days > 0) return `${days}d ${hours}h`
+    if (hours > 0) return `${hours}h ${mins}m`
+    return `${mins}m`
+  }, [isLoadingRemaining, isLocked, secondsRemaining])
+
+  const unlockDateLabel = useMemo(() => {
+    if (!isLocked) return ''
+    const ms = Number(secondsRemaining) * 1000
+    const d  = new Date(Date.now() + ms)
+    return d.toLocaleString()
+  }, [isLocked, secondsRemaining])
+
+  /* ---------------------------- handlers ------------------------------ */
   const handleStakeMax = () => {
-    setStakeAmount(dgoldBalance ? formatEther(dgoldBalance) : '0')
+    setStakeAmount(formatEther(dgoldBalance))
   }
 
   const handleUnstakeMax = () => {
-    setUnstakeAmount(dvoteBalance ? formatEther(dvoteBalance) : '0')
+    // user can at most unstake what is staked (vault) *and* what they hold as votes; prefer vault value
+    const max = stakedBalance > 0n ? stakedBalance : dvoteBalance
+    setUnstakeAmount(formatEther(max))
   }
 
   const handleApprove = async () => {
     if (!stakeAmount || Number(stakeAmount) <= 0) return
-    
+
     setIsApproving(true)
     try {
-      toast({
-        title: "Approval pending",
-        description: "Please confirm the transaction in your wallet",
-      })
+      toast({ title: "Approval pending", description: "Confirm in wallet" })
 
       await writeContractAsync({
         abi: ERC20.abi,
@@ -89,16 +141,9 @@ export function StakingCard() {
         args: [STAKING_CONTRACT, parseEther(stakeAmount)],
       })
 
-      toast({
-        title: "Approval successful",
-        description: "You can now stake your DGOLD tokens",
-      })
+      toast({ title: "Approval successful", description: "You can now stake" })
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Approval failed",
-        description: "There was an error approving your tokens",
-      })
+      toast({ variant: "destructive", title: "Approval failed", description: "Transaction error" })
       console.error('Approval failed:', error)
     } finally {
       setIsApproving(false)
@@ -110,73 +155,31 @@ export function StakingCard() {
 
     setIsStaking(true)
     try {
-      toast({
-        title: "Staking pending",
-        description: "Please confirm the staking transaction",
-      })
+      toast({ title: "Staking pending", description: "Confirm in wallet" })
 
       await writeContractAsync({
-        abi: [
-          {
-            inputs: [{ name: 'amount', type: 'uint256' }],
-            name: 'stake',
-            outputs: [],
-            stateMutability: 'nonpayable',
-            type: 'function'
-          }
-        ],
+        abi: vailtABI.abi,
         address: STAKING_CONTRACT,
         functionName: 'stake',
         args: [parseEther(stakeAmount)],
       })
 
-      toast({
-        title: "Staking successful",
-        description: "Now delegating your voting power...",
-      })
-
-      await writeContractAsync({
-        abi: [
-          {
-            inputs: [{ name: 'delegatee', type: 'address' }],
-            name: 'delegate',
-            outputs: [],
-            stateMutability: 'nonpayable',
-            type: 'function'
-          }
-        ],
-        address: DVOTE_TOKEN,
-        functionName: 'delegate',
-        args: [address as `0x${string}`],
-      })
-
-      toast({
-        title: "Success",
-        description: "Tokens staked and voting power delegated",
-      })
-
+      toast({ title: "Staking successful", description: "Voting power minted" })
       setStakeAmount('')
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Transaction failed",
-        description: "There was an error with your transaction",
-      })
-      console.error('Staking or delegation failed:', error)
+      toast({ variant: "destructive", title: "Staking failed", description: "Transaction error" })
+      console.error('Staking failed:', error)
     } finally {
       setIsStaking(false)
     }
   }
 
   const handleUnstake = async () => {
-    if (!unstakeAmount || !dvoteBalance) return
+    if (!unstakeAmount || Number(unstakeAmount) <= 0) return
 
     setIsUnstaking(true)
     try {
-      toast({
-        title: "Unstaking pending",
-        description: "Please confirm the unstaking transaction",
-      })
+      toast({ title: "Unstaking pending", description: "Confirm in wallet" })
 
       await writeContractAsync({
         abi: [
@@ -185,8 +188,8 @@ export function StakingCard() {
             name: 'unstake',
             outputs: [],
             stateMutability: 'nonpayable',
-            type: 'function'
-          }
+            type: 'function',
+          },
         ],
         address: STAKING_CONTRACT,
         functionName: 'unstake',
@@ -195,36 +198,21 @@ export function StakingCard() {
 
       toast({
         title: "Success",
-        description: "Tokens successfully unstaked",
-        action: (
-          <ToastAction altText="View transaction">View</ToastAction>
-        ),
+        description: "Tokens unstaked",
+        action: <ToastAction altText="View transaction">View</ToastAction>,
       })
-
       setUnstakeAmount('')
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Unstaking failed",
-        description: "There was an error unstaking your tokens",
-      })
+      toast({ variant: "destructive", title: "Unstake failed", description: "Transaction error" })
       console.error('Unstaking failed:', error)
     } finally {
       setIsUnstaking(false)
     }
   }
 
-  const getRemainingLockTime = () => {
-    if (!stakeInfo?.[1]) return 'No active stake'
-    const unlockTime = Number(stakeInfo[1]) * 1000
-    const now = Date.now()
-    if (now >= unlockTime) return 'Unlocked'
-    
-    const diff = unlockTime - now
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-    return `${days}d ${hours}h remaining`
-  }
+  /* ---------------------------- render helpers ------------------------ */
+  const youReceiveStake = stakeAmount && Number(stakeAmount) > 0 ? stakeAmount : '0'
+  const youReceiveUnstake = unstakeAmount && Number(unstakeAmount) > 0 ? unstakeAmount : '0'
 
   return (
     <div className="w-full max-w-md">
@@ -233,15 +221,15 @@ export function StakingCard() {
           <TabsTrigger value="stake">Stake</TabsTrigger>
           <TabsTrigger value="unstake">Unstake</TabsTrigger>
         </TabsList>
+
+        {/* ------------------------------ STAKE TAB ------------------------------ */}
         <TabsContent value="stake">
           <div className="bg-[#141414] border border-[#222222] rounded-lg p-4 space-y-4">
             <div className="space-y-2">
               <div className="flex justify-between">
                 <label className="text-sm text-gray-400">Amount</label>
-                <div className="text-right">
-                  <div className="text-sm text-gray-400">
-                    Balance: {formatEther(dgoldBalance || BigInt(0))} DGOLD
-                  </div>
+                <div className="text-right text-sm text-gray-400">
+                  Balance: {formatEther(dgoldBalance)} AIDAO
                 </div>
               </div>
               <div className="flex gap-2">
@@ -261,31 +249,31 @@ export function StakingCard() {
                 </Button>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-1">
                   <span className="text-gray-400">Lock Duration</span>
                   <Info className="h-4 w-4 text-gray-400" />
                 </div>
-                <span className="text-gray-200">90 days</span>
+                <span className="text-gray-200">30 days (extends on each stake)</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">You will receive</span>
-                <span className="text-gray-200">{formatEther(BigInt(parseEther(stakeAmount || '0')))} DVOTE</span>
+                <span className="text-gray-200">{youReceiveStake} vAIDAO</span>
               </div>
             </div>
 
             {address ? (
-              (allowance || BigInt(0)) >= parseEther(stakeAmount || '0') ? (
-                <Button 
-                  onClick={handleStake} 
-                  className="w-full" 
+              allowance >= (stakeAmount ? parseEther(stakeAmount) : 0n) ? (
+                <Button
+                  onClick={handleStake}
+                  className="w-full"
                   size="lg"
                   disabled={
-                    !stakeAmount || 
+                    !stakeAmount ||
                     Number(stakeAmount) <= 0 ||
-                    parseEther(stakeAmount) > (dgoldBalance || BigInt(0)) ||
+                    (stakeAmount ? parseEther(stakeAmount) : 0n) > dgoldBalance ||
                     isStaking
                   }
                 >
@@ -295,13 +283,13 @@ export function StakingCard() {
                       Staking...
                     </>
                   ) : (
-                    "Stake DGOLD"
+                    "Stake AIDAO"
                   )}
                 </Button>
               ) : (
-                <Button 
-                  onClick={handleApprove} 
-                  className="w-full" 
+                <Button
+                  onClick={handleApprove}
+                  className="w-full"
                   size="lg"
                   disabled={!stakeAmount || Number(stakeAmount) <= 0 || isApproving}
                 >
@@ -311,7 +299,7 @@ export function StakingCard() {
                       Approving...
                     </>
                   ) : (
-                    "Approve DGOLD"
+                    "Approve AIDAO"
                   )}
                 </Button>
               )
@@ -322,19 +310,16 @@ export function StakingCard() {
             )}
           </div>
         </TabsContent>
-        
+
+        {/* ----------------------------- UNSTAKE TAB ---------------------------- */}
         <TabsContent value="unstake">
           <div className="bg-[#141414] border border-[#222222] rounded-lg p-4 space-y-4">
             <div className="space-y-2">
               <div className="flex justify-between">
                 <label className="text-sm text-gray-400">Amount</label>
-                <div className="text-right">
-                  <div className="text-sm text-gray-400">
-                    Balance: {formatEther(dvoteBalance || BigInt(0))} DVOTE
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    Staked: {formatEther(stakeInfo?.[0] || BigInt(0))} DGOLD
-                  </div>
+                <div className="text-right text-sm text-gray-400">
+                  <div>Balance: {formatEther(dvoteBalance)} vAIDAO</div>
+                  <div>Staked: {formatEther(stakedBalance)} AIDAO</div>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -354,33 +339,38 @@ export function StakingCard() {
                 </Button>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-1">
                   <span className="text-gray-400">Lock Status</span>
                   <Info className="h-4 w-4 text-gray-400" />
                 </div>
-                <span className="text-gray-200">{getRemainingLockTime()}</span>
+                <span className="text-gray-200">{remainingLabel}</span>
               </div>
+              {isLocked && (
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Unlocks approx:</span>
+                  <span>{unlockDateLabel}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">You will receive</span>
-                <span className="text-gray-200">{formatEther(BigInt(parseEther(unstakeAmount || '0')))} DGOLD</span>
+                <span className="text-gray-200">{youReceiveUnstake} AIDAO</span>
               </div>
             </div>
 
             {address ? (
-              <Button 
-                onClick={handleUnstake} 
-                className="w-full" 
+              <Button
+                onClick={handleUnstake}
+                className="w-full"
                 size="lg"
                 disabled={
-                  !dvoteBalance || 
-                  !unstakeAmount || 
+                  isUnstaking ||
+                  !unstakeAmount ||
                   Number(unstakeAmount) <= 0 ||
-                  parseEther(unstakeAmount) > (dvoteBalance || BigInt(0)) ||
-                  Date.now() < Number(stakeInfo?.[1] || 0) * 1000 ||
-                  isUnstaking
+                  (unstakeAmount ? parseEther(unstakeAmount) : 0n) > dvoteBalance ||
+                  isLocked
                 }
               >
                 {isUnstaking ? (
@@ -388,9 +378,11 @@ export function StakingCard() {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Unstaking...
                   </>
-                ) : !stakeInfo || Date.now() < Number(stakeInfo?.[1] || 0) * 1000 
-                  ? "Tokens Locked" 
-                  : "Unstake DGOLD"}
+                ) : isLocked ? (
+                  "Tokens Locked"
+                ) : (
+                  "Unstake AIDAO"
+                )}
               </Button>
             ) : (
               <Button className="w-full hover:bg-[#0ad197d4]" size="lg">
