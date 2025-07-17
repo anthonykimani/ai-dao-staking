@@ -16,8 +16,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Staking by DEFI GOLD",
-  description: "Stake and Earn with DEFI GOLD",
+  title: "Staking by AI DAO Staking",
+  description: "Stake and Earn with AI DAO Staking",
 };
 
 export default async function RootLayout({

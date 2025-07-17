@@ -40,7 +40,7 @@ if (!projectId) {
   throw new Error('Project ID is not defined')
 }
 
-export const networks = [xrplevmTestnet,xrplEVMMainnet]
+export const networks = [xrplevmTestnet, xrplEVMMainnet]
 
 //Set up the Wagmi Adapter (Config)
 export const wagmiAdapter = new WagmiAdapter({

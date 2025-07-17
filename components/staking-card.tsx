@@ -24,8 +24,8 @@ import vailtABI from "@/context/vault.json"
  * ------------------------------------------------------------------ */
 
 const STAKING_CONTRACT = '0x48592D1411f05396F6e6Ce7CceB729Ef33b7cc0b'
-const DGOLD_TOKEN      = '0xEeD878017f027FE96316007D0ca5fDA58Ee93a6b'
-const DVOTE_TOKEN      = '0xD6a9563f3EeDE5eFA9183F938c4aDF7ccA7D6DB0'
+const AIDAO_TOKEN = '0xEeD878017f027FE96316007D0ca5fDA58Ee93a6b'
+const AIDAOVOTE_TOKEN = '0xD6a9563f3EeDE5eFA9183F938c4aDF7ccA7D6DB0'
 
 export function StakingCard() {
   /* ---------------------------- local state ---------------------------- */
@@ -40,10 +40,10 @@ export function StakingCard() {
   const { toast } = useToast()
 
   /* ---------------------------- on-chain reads ------------------------- */
-  // User DGOLD (AIDAO) wallet balance
+  // User AIDAO (AIDAO) wallet balance
   const { data: dgoldBalanceRaw } = useReadContract({
     abi: ERC20.abi,
-    address: DGOLD_TOKEN,
+    address: AIDAO_TOKEN,
     functionName: 'balanceOf',
     args: [address],
     query: { enabled: Boolean(address) },
@@ -52,7 +52,7 @@ export function StakingCard() {
   // User vAIDAO wallet balance
   const { data: dvoteBalanceRaw } = useReadContract({
     abi: ERC20.abi, // vERC20 inherits ERC20Votes; ERC20 ABI is enough for balanceOf
-    address: DVOTE_TOKEN,
+    address: AIDAOVOTE_TOKEN,
     functionName: 'balanceOf',
     args: [address],
     query: { enabled: Boolean(address)},
@@ -76,10 +76,10 @@ export function StakingCard() {
     query: { enabled: Boolean(address), refetchInterval: 10_000 },
   }) as { data?: bigint, isLoading: boolean }
 
-  // DGOLD allowance granted to staking vault
+  // AIDAO allowance granted to staking vault
   const { data: allowanceRaw } = useReadContract({
     abi: ERC20.abi,
-    address: DGOLD_TOKEN,
+    address: AIDAO_TOKEN,
     functionName: 'allowance',
     args: [address, STAKING_CONTRACT],
     query: { enabled: Boolean(address) },
@@ -136,7 +136,7 @@ export function StakingCard() {
 
       await writeContractAsync({
         abi: ERC20.abi,
-        address: DGOLD_TOKEN,
+        address: AIDAO_TOKEN,
         functionName: 'approve',
         args: [STAKING_CONTRACT, parseEther(stakeAmount)],
       })
